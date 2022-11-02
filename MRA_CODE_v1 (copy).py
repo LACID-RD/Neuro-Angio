@@ -1,4 +1,7 @@
 
+from os import access
+from turtle import width
+from unittest import skip
 import SimpleITK as sitk
 import numpy as np
 import pydicom as dicom
@@ -20,19 +23,22 @@ from itertools import groupby
 ###########################################
 
 class VelFld:
-    def __init__ (self, slice, time, info, 
-    imgposition,
-    vx, vy, vz):
+    def __init__ (self, slice, time, 
+    imgposition, triggertime,
+    vx, vy, vz, accX, accY, accZ, fc):
 
         self.slice = slice
         self.time = time
-        self.info = info
-        self.dir = dir 
         self.imgposition = imgposition
+        self.triggertime = triggertime
         '''Atributos especificos de velocidades'''   
         self.Vx = vx 
         self.Vy = vy
         self.Vz = vz
+        self.accX = accX
+        self.accY = accY
+        self.accZ = accZ
+        self.fc = fc
 
 
 def position_ROI(Dcm_im_ROI):
@@ -66,126 +72,80 @@ file_name = filedialog.askopenfilenames()
 
 ndeah = 0
 
-for i in file_name:
-    Dcm = pydicom.dcmread(i)
-    # Filtrado de imágenes de magnitud
-        # image_slices.append(Dcm[0x2001,0x100a].value)
-        # dir = 0
-    nslices = Dcm[0x2001, 0x1018].value
-    nphases = Dcm[0x2001, 0x1017].value
-        # Filtrado según componentes
-        # if Dcm[0x2001, 0x101a].value[0]>50 and Dcm[0x2001, 0x101a].value[1]>50 and Dcm[0x2001, 0x101a].value[2]>50: # Imagen neta
-        #     dir = 1
-        # elif Dcm[0x2001, 0x101a].value[0]>50 and Dcm[0x2001, 0x101a].value[1]==0 and Dcm[0x2001, 0x101a].value[2]==0: # RL # X
-        #     dir = 2
-        # elif Dcm[0x2001, 0x101a].value[0]==0 and Dcm[0x2001, 0x101a].value[1]>50 and Dcm[0x2001, 0x101a].value[2]==0: # AP # Y
-        #     dir = 3
-        # elif Dcm[0x2001, 0x101a].value[0]==0 and Dcm[0x2001, 0x101a].value[1]==0 and Dcm[0x2001, 0x101a].value[2]>50: # FH # Z
-        #     dir = 4
+# print(file_name[0],type(file_name))
+Dcm1 = pydicom.dcmread(file_name[0])
 
-PDP = np.zeros((nslices, nphases))
-print(PDP)
+nslices = Dcm1[0x2001, 0x1018].value
+nphases = Dcm1[0x2001, 0x1017].value
+height, width =  (Dcm1.pixel_array).shape
+
+
+PDP = []
+#print(PDP)
     
-for n in range(nslices*nphases):
-    image_list.append('imagen' + str(img_qtt)) # Lista de imágenes
-    image_list[ndeah] = VelFld (None, None, None, None, None, None, None)
-    ndeah = ndeah+ 1
+for n in range(nslices):
+    image_list = []
+    for j in range(nphases):
+        image_list.append('imagen' + str(j)) # Lista de imágenes
+        image_list[j] = VelFld (n+1, j+1, None, None, None, None, None, None, None, None, None)
+        # ndeah = ndeah+ 1
+    PDP.append(image_list)
 
 # for i 
 
-# print(len(image_list))
+# print((PDP[1][1].slice))
 
-# # define a function for key
-# def key_func(k):
-#     return k[0x0018,0x1060]
+for i in file_name:
+    Dcm = pydicom.dcmread(i)
+    if str(Dcm[0x2005, 0x116e].value) == 'PCA': 
+        for j in range(nslices):
+            for k in range(nphases):
+                # Filtrado según componentes
+                if int(Dcm[0x2001, 0x100a].value) is int(j+1) and int(Dcm[0x2001,0x1008].value) is int(k+1):
+                    setattr(PDP[j][k], "imgposition", Dcm[0x0020,0x0032].value) 
+                    setattr(PDP[j][k], "triggertime", Dcm[0x0018,0x1060].value)        
+                    if Dcm[0x2001, 0x101a].value[0]>50 and Dcm[0x2001, 0x101a].value[1]>50 and Dcm[0x2001, 0x101a].value[2]>50: # Imagen neta
+                        # PDP[j][k].vx = Dcm.pixel_array
+                        continue
+                    if Dcm[0x2001, 0x101a].value[0]>50 and Dcm[0x2001, 0x101a].value[1]==0 and Dcm[0x2001, 0x101a].value[2]==0: # RL # X
+                        setattr(PDP[j][k], "Vx", Dcm.pixel_array)                      
+                    elif Dcm[0x2001, 0x101a].value[0]==0 and Dcm[0x2001, 0x101a].value[1]>50 and Dcm[0x2001, 0x101a].value[2]==0: # AP # Y
+                        setattr(PDP[j][k], "Vy", Dcm.pixel_array) 
+                    elif Dcm[0x2001, 0x101a].value[0]==0 and Dcm[0x2001, 0x101a].value[1]==0 and Dcm[0x2001, 0x101a].value[2]>50: # FH # Z
+                        setattr(PDP[j][k], "Vz", Dcm.pixel_array) 
 
-# # define a function for key
-# def key_func1(k):
-#     return k[0x2001,0x100a]
+hola = PDP[1][1]
+#print(hola.Vx)
 
-# # sort INFO data by 'company' key.
-# dcm_all = sorted(dcm_all, key=key_func.keys())
-# print(dcm_all)
+"""FILTRADO VER CON RODRI"""
 
-# key_func = lambda x: x[0x0018,0x1060].value
-# key_func1 = lambda x: x[0x2001,0x100a].value
+"""ACELERACION"""
 
-# groupDcm = groupby(dcm_all, key_func.keys())
+accMatrixX = np.zeros(shape=(int(height),int(width)))
+accMatrixY = np.zeros(shape=(int(height),int(width)))
+accMatrixZ = np.zeros(shape=(int(height),int(width)))
 
-# grouppedByTrigger = []
-# for key, group in groupDcm:
-#     grouppedByTrigger.append(list(group))
-
-# for i in range(len(grouppedByTrigger)):
-#     groupDcmFinal = groupby(grouppedByTrigger[i], key_func1)
-
-#     grouppedByTSlice = []
-#     for key, group in groupDcmFinal:
-#         grouppedByTSlice.append(list(group))
+forceMatrix = np.zeros(shape=(int(height),int(width)))
 
 
-# for j in range(len(grouppedByTrigger)):
-#     for k in range(len(grouppedByTrigger[j])):
-#         dir = 0
-#         Dcm = grouppedByTrigger[j][k]
-#         # Filtrado según componentes
-#         if Dcm[0x2001, 0x101a].value[0]>50 and Dcm[0x2001, 0x101a].value[1]>50 and Dcm[0x2001, 0x101a].value[2]>50: # Imagen neta
-#             dir = 1
-#         elif Dcm[0x2001, 0x101a].value[0]>50 and Dcm[0x2001, 0x101a].value[1]==0 and Dcm[0x2001, 0x101a].value[2]==0: # RL # X
-#             dir = 2
-#             imgvx = np.copy(Dcm.pixel_array) 
-#         elif Dcm[0x2001, 0x101a].value[0]==0 and Dcm[0x2001, 0x101a].value[1]>50 and Dcm[0x2001, 0x101a].value[2]==0: # AP # Y
-#             dir = 3
-#             imgvy = np.copy(Dcm.pixel_array) 
-#         elif Dcm[0x2001, 0x101a].value[0]==0 and Dcm[0x2001, 0x101a].value[1]==0 and Dcm[0x2001, 0x101a].value[2]>50: # FH # Z
-#             dir = 4
-#             imgvz = np.copy(Dcm.pixel_array)
+for n in range(nslices):
+    for j in range(nphases):
+        if j == 0:
+            continue
+        deltaT = (float(PDP[n][j].triggertime) - float(PDP[n][j-1].triggertime))
+    # print(deltaT)
+        accMatrixX = (PDP[n][j].Vx - PDP[n][j-1].Vx)/deltaT
+        accMatrixY = (PDP[n][j].Vy - PDP[n][j-1].Vy)/deltaT
+        accMatrixZ = (PDP[n][j].Vz - PDP[n][j-1].Vz)/deltaT
+        forceMatrix = np.multiply(PDP[n][j].Vx, PDP[n][j].Vx) + np.multiply(PDP[n][j].Vy, PDP[n][j].Vy) + np.multiply(PDP[n][j].Vz, PDP[n][j].Vz)
+        setattr(PDP[n][j], "fc", forceMatrix)
+        setattr(PDP[n][j], "accX", accMatrixX) 
+        setattr(PDP[n][j], "accY", accMatrixY) 
+        setattr(PDP[n][j], "accZ", accMatrixZ) 
 
-#     # ARMAR UN SOLO OBJ CON LAS IMAGENES DE LAS 3 COMPONENTES COMO 3 ATRIBUTOS DISTINTOS
-#     image_list[img_qtt] = Imagen(Dcm[0x2001,0x100a].value, Dcm[0x0018,0x1060].value, 
-#     np.copy(Dcm.pixel_array), Dcm, Dcm[0x0020,0x0032].value, Dcm[0x0028,0x0030].value[0], 
-#     Dcm[0x0028,0x0030].value[1], imgvx, imgvy, imgvz) # Lista de objetos tipo image
-#     np.copy(Dcm.pixel_array), Dcm, Dcm[0x0020,0x0032].value, Dcm[0x0028,0x0030].value[0], 
-#     dcm_im_all.append(Dcm.pixel_array)
-#     img_qtt = img_qtt + 1    
+plt.imshow(PDP[2][2].fc)
+"""ENERGIA"""
 
-# groupby(dcm)
-#         ''' Para crear las instancias de la clase definiria primerp cada tag 
-#         Ej Imagen(slice, tiempo, ..., vr, vx, vy, vz)
-#         '''
-#         #slice = 
-
-#         '''Tag velocidades: (0x2001, 0x101a)'''
-
-#         vx = ...
-#         vy = ...
-#         vz = ...
-
-#         dir = 0
-#         # Filtrado según componentes
-#         if Dcm[0x2001, 0x101a].value[0]>50 and Dcm[0x2001, 0x101a].value[1]>50 and Dcm[0x2001, 0x101a].value[2]>50: # Imagen neta
-#             dir = 1
-#             imgvr = np.copy(Dcm.pixel_array)
-
-#         elif Dcm[0x2001, 0x101a].value[0]>50 and Dcm[0x2001, 0x101a].value[1]==0 and Dcm[0x2001, 0x101a].value[2]==0: # RL # X
-#             dir = 2
-#             imgvx = np.copy(Dcm.pixel_array) 
-
-#         elif Dcm[0x2001, 0x101a].value[0]==0 and Dcm[0x2001, 0x101a].value[1]>50 and Dcm[0x2001, 0x101a].value[2]==0: # AP # Y
-#             dir = 3
-#             imgvy = np.copy(Dcm.pixel_array) 
-
-#         elif Dcm[0x2001, 0x101a].value[0]==0 and Dcm[0x2001, 0x101a].value[1]==0 and Dcm[0x2001, 0x101a].value[2]>50: # FH # Z
-#             dir = 4
-#             imgvz = np.copy(Dcm.pixel_array) 
-
-#         # ARMAR UN SOLO OBJ CON LAS IMAGENES DE LAS 3 COMPONENTES COMO 3 ATRIBUTOS DISTINTOS
-#         image_list[img_qtt] = Imagen(Dcm[0x2001,0x100a].value, Dcm[0x0018,0x1060].value, 
-#         np.copy(Dcm.pixel_array), Dcm, Dcm[0x0020,0x0032].value, Dcm[0x0028,0x0030].value[0], 
-#         Dcm[0x0028,0x0030].value[1], vx, vy, vz) # Lista de objetos tipo image
-#         np.copy(Dcm.pixel_array), Dcm, Dcm[0x0020,0x0032].value, Dcm[0x0028,0x0030].value[0], 
-#         dcm_im_all.append(Dcm.pixel_array)
-#         img_qtt = img_qtt + 1
 
 # # Ordena los objetos y calcula variables
 # sorted_image_list  = sorted(image_list, key = operator.attrgetter('dir', 'slice', 'time')) 
